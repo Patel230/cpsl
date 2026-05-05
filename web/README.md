@@ -17,10 +17,32 @@ Requirements:
 - Rust target: `wasm32-unknown-emscripten`
 - Emscripten `emcc` from SDK 5.0.7 or newer
 
+If a repo-local `emsdk/emsdk_env.sh` exists, `build.sh` sources it automatically.
+Otherwise install and activate Emscripten from the repo root:
+
+```sh
+git clone https://github.com/emscripten-core/emsdk.git
+./emsdk/emsdk install 5.0.7
+./emsdk/emsdk activate 5.0.7
+```
+
 For static layout checks without building the WASM bundle:
 
 ```sh
 CPSL_SKIP_WASM=1 ./web/build.sh
+```
+
+## Serve Locally
+
+```sh
+./web/server.sh
+```
+
+By default this serves `web/dist` at <http://127.0.0.1:8000>. Override the host
+or port with `HOST` and `PORT`:
+
+```sh
+PORT=9000 ./web/server.sh
 ```
 
 ## Deploy

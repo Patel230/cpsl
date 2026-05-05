@@ -6,6 +6,7 @@ REPO_DIR="$(cd "$WEB_DIR/.." && pwd)"
 PUBLIC_DIR="$WEB_DIR/public"
 DIST_DIR="$WEB_DIR/dist"
 WASM_DIR="$DIST_DIR/assets/wasm"
+EMSDK_ENV="${EMSDK_ENV:-$REPO_DIR/emsdk/emsdk_env.sh}"
 
 rm -rf "$DIST_DIR"
 mkdir -p "$WASM_DIR"
@@ -18,8 +19,20 @@ if [[ "${CPSL_SKIP_WASM:-0}" == "1" ]]; then
 fi
 
 if ! command -v emcc >/dev/null 2>&1; then
+  if [[ -f "$EMSDK_ENV" ]]; then
+    export EMSDK_QUIET="${EMSDK_QUIET:-1}"
+    # shellcheck source=/dev/null
+    source "$EMSDK_ENV" >/dev/null
+  fi
+fi
+
+if ! command -v emcc >/dev/null 2>&1; then
   echo "error: emcc is required to build the CPSL browser runtime" >&2
-  echo "hint: install Emscripten or run CPSL_SKIP_WASM=1 ./web/build.sh for static-only checks" >&2
+  echo "hint: install Emscripten with:" >&2
+  echo "  git clone https://github.com/emscripten-core/emsdk.git" >&2
+  echo "  ./emsdk/emsdk install 5.0.7" >&2
+  echo "  ./emsdk/emsdk activate 5.0.7" >&2
+  echo "then rerun ./web/build.sh, or run CPSL_SKIP_WASM=1 ./web/build.sh for static-only checks" >&2
   exit 1
 fi
 
