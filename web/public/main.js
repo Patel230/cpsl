@@ -11,13 +11,17 @@ const PROMPTS = new Map([
 ]);
 
 const root = document.documentElement;
+const terminalShell = document.querySelector(".terminal-shell");
+const terminal = document.querySelector(".terminal");
+const terminalScreen = document.querySelector("#terminal-screen");
 const output = document.querySelector("#terminal-output");
 const form = document.querySelector("#terminal-form");
 const input = document.querySelector("#terminal-input");
 const promptEl = document.querySelector("#terminal-prompt");
 const resetButton = document.querySelector("#reset-terminal");
+const fullscreenButton = document.querySelector("#fullscreen-terminal");
 const themeToggle = document.querySelector(".theme-toggle");
-const modeButtons = [...document.querySelectorAll("[data-mode]")];
+const modeButtons = [...document.querySelectorAll(".mode-tabs [data-mode]")];
 const quickButtons = [...document.querySelectorAll(".quick-commands [data-command]")];
 
 let mode = 0;
@@ -49,6 +53,29 @@ themeToggle.addEventListener("click", () => {
   applyTheme(next);
 });
 
+function scrollTerminalToBottom() {
+  requestAnimationFrame(() => {
+    terminalScreen.scrollTop = terminalScreen.scrollHeight;
+  });
+}
+
+function focusPrompt() {
+  input.focus();
+  scrollTerminalToBottom();
+}
+
+function setFullPage(expanded) {
+  terminalShell.classList.toggle("is-full-page", expanded);
+  document.body.classList.toggle("terminal-full-page", expanded);
+  fullscreenButton.setAttribute("aria-pressed", expanded ? "true" : "false");
+  fullscreenButton.setAttribute(
+    "aria-label",
+    expanded ? "Exit full page terminal" : "Expand terminal to full page"
+  );
+  fullscreenButton.textContent = expanded ? "exit full" : "full page";
+  focusPrompt();
+}
+
 function appendLine(text, kind = "output", linePrompt = "") {
   const line = document.createElement("div");
   line.className = `terminal-line ${kind}`;
@@ -65,7 +92,7 @@ function appendLine(text, kind = "output", linePrompt = "") {
   }
 
   output.append(line);
-  output.scrollTop = output.scrollHeight;
+  scrollTerminalToBottom();
 }
 
 function appendBlock(text, kind = "output") {
@@ -89,12 +116,14 @@ function setMode(nextMode, announce = true) {
     appendLine(`mode: ${MODE_LABELS.get(mode)}`, "system");
   }
 
-  input.focus();
+  focusPrompt();
 }
 
 function setBusy(nextBusy) {
   busy = nextBusy;
-  input.disabled = nextBusy || !ready;
+  const commandReady = ready && !nextBusy;
+  form.hidden = !commandReady;
+  input.disabled = !commandReady;
   resetButton.disabled = nextBusy || !ready;
 }
 
@@ -136,6 +165,13 @@ input.addEventListener("keydown", (event) => {
   if (event.key.toLowerCase() === "l" && event.ctrlKey) {
     event.preventDefault();
     output.replaceChildren();
+    scrollTerminalToBottom();
+  }
+});
+
+terminal.addEventListener("click", (event) => {
+  if (event.target !== input) {
+    focusPrompt();
   }
 });
 
@@ -148,7 +184,7 @@ quickButtons.forEach((button) => {
     const nextMode = Number(button.dataset.mode);
     if (nextMode !== mode) setMode(nextMode);
     input.value = button.dataset.command;
-    input.focus();
+    focusPrompt();
   });
 });
 
@@ -156,6 +192,16 @@ resetButton.addEventListener("click", () => {
   if (busy) return;
   setBusy(true);
   worker.postMessage({ type: "reset" });
+});
+
+fullscreenButton.addEventListener("click", () => {
+  setFullPage(!terminalShell.classList.contains("is-full-page"));
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && terminalShell.classList.contains("is-full-page")) {
+    setFullPage(false);
+  }
 });
 
 worker.addEventListener("message", (event) => {
@@ -166,7 +212,7 @@ worker.addEventListener("message", (event) => {
     setBusy(false);
     appendLine("CPSL WASM runtime ready", "system");
     appendLine("try: echo hello from CPSL", "system");
-    input.focus();
+    focusPrompt();
     return;
   }
 
@@ -176,7 +222,7 @@ worker.addEventListener("message", (event) => {
     prompt = PROMPTS.get(mode) || "$";
     promptEl.textContent = prompt;
     appendLine("session reset", "system");
-    input.focus();
+    focusPrompt();
     return;
   }
 
@@ -192,7 +238,7 @@ worker.addEventListener("message", (event) => {
     }
     prompt = message.prompt || prompt;
     promptEl.textContent = prompt;
-    input.focus();
+    focusPrompt();
     return;
   }
 

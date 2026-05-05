@@ -54,22 +54,25 @@
               <button type="button" role="tab" aria-selected="false" data-mode="2">Luau</button>
             </div>
             <button class="icon-button" type="button" id="reset-terminal" aria-label="Reset terminal">reset</button>
+            <button class="icon-button" type="button" id="fullscreen-terminal" aria-label="Expand terminal to full page" aria-pressed="false">full page</button>
           </div>
 
           <div class="terminal" aria-live="polite" aria-label="Interactive CPSL terminal">
-            <div class="terminal-output" id="terminal-output"></div>
-            <form class="terminal-input-row" id="terminal-form" autocomplete="off">
-              <label class="prompt" for="terminal-input" id="terminal-prompt">$</label>
-              <input
-                id="terminal-input"
-                name="command"
-                type="text"
-                spellcheck="false"
-                autocapitalize="off"
-                autocomplete="off"
-                aria-label="CPSL command"
-              >
-            </form>
+            <div class="terminal-screen" id="terminal-screen">
+              <div class="terminal-output" id="terminal-output"></div>
+              <form class="terminal-input-row" id="terminal-form" autocomplete="off">
+                <label class="prompt" for="terminal-input" id="terminal-prompt">$</label>
+                <input
+                  id="terminal-input"
+                  name="command"
+                  type="text"
+                  spellcheck="false"
+                  autocapitalize="off"
+                  autocomplete="off"
+                  aria-label="CPSL command"
+                >
+              </form>
+            </div>
           </div>
 
           <div class="quick-commands" aria-label="Example commands">
