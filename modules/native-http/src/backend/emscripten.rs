@@ -1,3 +1,5 @@
+//! Emscripten HTTP backend that delegates requests to browser fetch.
+
 use super::HttpBackend;
 use crate::types::{Headers, HttpError, Request, Response};
 use serde::Deserialize;
