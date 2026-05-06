@@ -44,6 +44,17 @@ fn kwargs_module_call_no_kwargs_unchanged() {
 }
 
 #[test]
+fn local_name_shadows_builtin_module_for_method_calls() {
+    // A local variable named like a CPSL module should still use Python string methods.
+    let result = transpile_py(r#"csv = "a,b"; parts = csv.split(",")"#);
+    assert!(
+        result.contains(r#"py.str_split(csv, ",")"#),
+        "got: {}",
+        result
+    );
+}
+
+#[test]
 fn kwargs_module_call_bool_false() {
     // sh.sort(reverse=False) → sh.sort({reverse = false})
     let result = transpile_py("sh.sort(reverse=False)");
