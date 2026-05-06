@@ -5,12 +5,17 @@ let freeString = null;
 let freeSession = null;
 let lastError = null;
 
+const BUILD_ID = "__CPSL_BUILD_ID__";
+const cacheSuffix = BUILD_ID.startsWith("__") ? "" : `?v=${encodeURIComponent(BUILD_ID)}`;
+
 async function loadModule() {
   if (moduleInstance) return moduleInstance;
 
   let createModule;
   try {
-    ({ default: createModule } = await import("./assets/wasm/cpsl.js"));
+    ({ default: createModule } = await import(
+      new URL(`./assets/wasm/cpsl.js${cacheSuffix}`, self.location.href).href
+    ));
   } catch (error) {
     throw new Error(
       "CPSL WASM bundle is missing. Run ./web/build.sh with Emscripten installed, or let the GitHub Pages workflow build it."
@@ -19,7 +24,7 @@ async function loadModule() {
 
   moduleInstance = await createModule({
     locateFile(path) {
-      return new URL(`./assets/wasm/${path}`, self.location.href).href;
+      return new URL(`./assets/wasm/${path}${cacheSuffix}`, self.location.href).href;
     },
   });
 

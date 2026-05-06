@@ -195,7 +195,10 @@ let busy = false;
 let history = [];
 let historyIndex = 0;
 
-const worker = new Worker("./cpsl.worker.js", { type: "module" });
+const BUILD_ID = "__CPSL_BUILD_ID__";
+const cacheSuffix = BUILD_ID.startsWith("__") ? "" : `?v=${encodeURIComponent(BUILD_ID)}`;
+
+const worker = new Worker(`./cpsl.worker.js${cacheSuffix}`, { type: "module" });
 
 function applyTheme(theme) {
   if (theme === "dark") {

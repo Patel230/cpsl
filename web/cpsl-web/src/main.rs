@@ -1,7 +1,9 @@
-use cpsl_core::{sh_transpile, transpile, Sandbox};
+use cpsl_core::{sh_transpile, transpile, MountTable, Sandbox};
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
+use std::path::PathBuf;
 use std::ptr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 const MODE_BASH: u32 = 0;
@@ -17,6 +19,7 @@ fn main() {}
 
 pub struct Session {
     sandbox: Sandbox,
+    workspace_dir: PathBuf,
     mode: Mode,
     lua_buffer: String,
     lua_multiline: bool,
@@ -62,16 +65,26 @@ impl Mode {
 
 impl Session {
     fn new() -> Result<Self, String> {
-        let sandbox = Sandbox::new().map_err(|e| e.to_string())?;
-        sandbox
-            .setup_shell_runtime(SHRT)
-            .map_err(|e| format!("failed to load shell runtime: {e}"))?;
-        sandbox
-            .setup_python_runtime(PYRT)
-            .map_err(|e| format!("failed to load python runtime: {e}"))?;
+        let (mounts, workspace_dir) = web_workspace_mounts()?;
+        let sandbox = match Sandbox::with_mounts(mounts) {
+            Ok(sandbox) => sandbox,
+            Err(e) => {
+                let _ = std::fs::remove_dir_all(&workspace_dir);
+                return Err(e.to_string());
+            }
+        };
+        if let Err(e) = sandbox.setup_shell_runtime(SHRT) {
+            let _ = std::fs::remove_dir_all(&workspace_dir);
+            return Err(format!("failed to load shell runtime: {e}"));
+        }
+        if let Err(e) = sandbox.setup_python_runtime(PYRT) {
+            let _ = std::fs::remove_dir_all(&workspace_dir);
+            return Err(format!("failed to load python runtime: {e}"));
+        }
 
         Ok(Self {
             sandbox,
+            workspace_dir,
             mode: Mode::Bash,
             lua_buffer: String::new(),
             lua_multiline: false,
@@ -194,6 +207,29 @@ impl Session {
             }
         }
     }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.workspace_dir);
+    }
+}
+
+fn web_workspace_mounts() -> Result<(MountTable, PathBuf), String> {
+    static SESSION_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    let id = SESSION_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let workspace_dir = std::env::temp_dir().join(format!("cpsl-web-{}-{id}", std::process::id()));
+    std::fs::create_dir_all(&workspace_dir)
+        .map_err(|e| format!("failed to initialize browser filesystem: {e}"))?;
+
+    let mut mounts = MountTable::new();
+    let spec = format!("{}:/", workspace_dir.display());
+    mounts
+        .parse_and_add(&spec)
+        .map_err(|e| format!("failed to mount browser filesystem: {e}"))?;
+
+    Ok((mounts, workspace_dir))
 }
 
 fn starts_python_block(input: &str) -> bool {
@@ -387,4 +423,73 @@ pub extern "C" fn cpsl_last_error() -> *const c_char {
         }
     }
     ptr::null()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ok(response: EvalResponse) -> String {
+        if response.ok {
+            response.output
+        } else {
+            panic!(
+                "eval failed: {}",
+                response
+                    .error
+                    .unwrap_or_else(|| "unknown error".to_string())
+            );
+        }
+    }
+
+    #[test]
+    fn session_root_is_writable() {
+        let mut session = Session::new().unwrap();
+
+        assert_eq!(ok(session.eval(Mode::Bash, "pwd")), "/");
+        ok(session.eval(Mode::Bash, "touch /foo"));
+        ok(session.eval(Mode::Bash, "touch empty.txt"));
+        ok(session.eval(Mode::Bash, "echo hello > note.txt"));
+        ok(session.eval(Mode::Bash, "mkdir /nested/path"));
+        ok(session.eval(Mode::Bash, "echo absolute > /nested/path/file.txt"));
+
+        assert_eq!(ok(session.eval(Mode::Bash, "cat /foo")), "");
+        assert_eq!(ok(session.eval(Mode::Bash, "cat note.txt")), "hello");
+        assert_eq!(
+            ok(session.eval(Mode::Bash, "cat /nested/path/file.txt")),
+            "absolute"
+        );
+        let listing = ok(session.eval(Mode::Bash, "ls"));
+        assert!(listing.lines().any(|line| line == "empty.txt"));
+        assert!(listing.lines().any(|line| line == "foo"));
+        assert!(listing.lines().any(|line| line == "note.txt"));
+        assert!(listing.lines().any(|line| line == "nested"));
+    }
+
+    #[test]
+    fn dynamic_mounts_stay_read_only_in_writable_web_root() {
+        let mut session = Session::new().unwrap();
+
+        let output = ok(session.eval(Mode::Bash, "mkdir /proc/newdir"));
+
+        assert!(
+            output.contains("/proc is read-only"),
+            "expected read-only synthetic mount message, got: {output}"
+        );
+        assert!(
+            !output.contains("function is not defined"),
+            "should not leak Luau nil-function errors, got: {output}"
+        );
+    }
+
+    #[test]
+    fn sessions_do_not_share_workspace_files() {
+        let mut first = Session::new().unwrap();
+        let mut second = Session::new().unwrap();
+
+        ok(first.eval(Mode::Bash, "touch first-only.txt"));
+        let listing = ok(second.eval(Mode::Bash, "ls"));
+
+        assert!(!listing.lines().any(|line| line == "first-only.txt"));
+    }
 }

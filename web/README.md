@@ -6,6 +6,16 @@ The demo runs CPSL in a Web Worker. The worker loads an Emscripten-built WASM
 bundle from `web/dist/assets/wasm/` and calls the Rust C ABI exposed by
 `web/cpsl-web`.
 
+Each browser session gets a fresh writable in-memory filesystem mounted at the
+sandbox root. Files are available to shell commands and `fs.*` calls for the
+life of that session, then discarded on reset or page reload. The demo does not
+use IndexedDB persistence. Synthetic system paths such as `/dev`, `/proc`, and
+`/etc` remain read-only.
+
+`build.sh` stamps the page, worker, and WASM URLs with a hash of the generated
+WASM bundle so browsers do not keep running an older embedded runtime after a
+deploy.
+
 ## Build
 
 ```sh

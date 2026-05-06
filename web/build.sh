@@ -8,12 +8,31 @@ DIST_DIR="$WEB_DIR/dist"
 WASM_DIR="$DIST_DIR/assets/wasm"
 EMSDK_ENV="${EMSDK_ENV:-$REPO_DIR/emsdk/emsdk_env.sh}"
 
-rm -rf "$DIST_DIR"
+if [[ -d "$DIST_DIR" ]]; then
+  find "$DIST_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+else
+  mkdir -p "$DIST_DIR"
+fi
 mkdir -p "$WASM_DIR"
 cp -R "$PUBLIC_DIR"/. "$DIST_DIR"/
 touch "$DIST_DIR/.nojekyll"
 
+apply_build_id() {
+  local build_id="$1"
+  build_id="$(printf '%s' "$build_id" | tr -cd 'A-Za-z0-9._-')"
+  if [[ -z "$build_id" ]]; then
+    build_id="local"
+  fi
+
+  perl -0pi -e "s/__CPSL_BUILD_ID__/$build_id/g" \
+    "$DIST_DIR/main.js" \
+    "$DIST_DIR/cpsl.worker.js"
+  perl -0pi -e "s#src=\"\\./main\\.js\"#src=\"./main.js?v=$build_id\"#g" \
+    "$DIST_DIR/index.html"
+}
+
 if [[ "${CPSL_SKIP_WASM:-0}" == "1" ]]; then
+  apply_build_id "${CPSL_BUILD_ID:-static}"
   echo "Built static site without CPSL WASM: $DIST_DIR"
   exit 0
 fi
@@ -49,5 +68,14 @@ cargo build \
 
 test -f "$WASM_DIR/cpsl.js"
 test -f "$WASM_DIR/cpsl.wasm"
+
+if [[ -n "${CPSL_BUILD_ID:-}" ]]; then
+  BUILD_ID="$CPSL_BUILD_ID"
+elif command -v shasum >/dev/null 2>&1; then
+  BUILD_ID="$(shasum -a 256 "$WASM_DIR/cpsl.wasm" | cut -d ' ' -f 1 | cut -c 1-16)"
+else
+  BUILD_ID="$(cksum "$WASM_DIR/cpsl.wasm" | cut -d ' ' -f 1)"
+fi
+apply_build_id "$BUILD_ID"
 
 echo "Built CPSL web site: $DIST_DIR"
