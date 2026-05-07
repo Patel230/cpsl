@@ -9,7 +9,7 @@ CPSL is an early open-source runtime for building small sandbox images an agent 
 The workflow is intentionally Docker-shaped:
 
 ```text
-cpsl build -> cpsl sandboxes -> cpsl run
+cpsl build -> cpsl ls -> cpsl run
 ```
 
 The implementation is not Docker. A CPSL capsule is not OCI, not a Linux filesystem, and not kernel isolation. It is a compact Luau-backed runtime image with only the modules and host access you asked for.
@@ -55,7 +55,7 @@ Build it, list it, and run it:
 
 ```sh
 ./cpsl build -t json-tool -f manifests/json-only.toml
-./cpsl sandboxes
+./cpsl ls
 ./cpsl run json-tool --lua -- 'print(json.encode({hello = "world"}))'
 ```
 
@@ -92,7 +92,7 @@ Shell and Python modes are front doors. CPSL parses those inputs, lowers them in
 
 ### Python-on-Luau Can Win Sometimes
 
-`./run_tests.sh` compares CPSL Python mode against `python3`, checks output equality, and reports startup, Python-to-Luau transpilation, Luau execution, and CPython `runpy` script time separately.
+`./bench-python-luau.sh` compares CPSL Python mode against `python3`, checks output equality, and reports startup, Python-to-Luau transpilation, Luau execution, and CPython `runpy` script time separately.
 
 On one local Darwin arm64 run with Python 3.9.6 on May 6, 2026:
 
@@ -104,7 +104,7 @@ On one local Darwin arm64 run with Python 3.9.6 on May 6, 2026:
 The smoke suite is the proof point, not a universal benchmark. Python-on-Luau can be faster for some scripts, which is enough to make the experiment interesting.
 
 ```sh
-./run_tests.sh
+./bench-python-luau.sh
 ```
 
 ## What CPSL Is Not

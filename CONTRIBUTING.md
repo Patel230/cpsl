@@ -5,7 +5,7 @@ Thanks for working on CPSL. Keep changes focused, update docs when behavior chan
 ## Prerequisites
 
 - Rust and Cargo
-- `python3`, `perl`, and `bc` for `./run_tests.sh`
+- `python3`, `perl`, and `bc` for `./bench-python-luau.sh`
 - Platform native build tools required by Rust crates on your OS
 - Optional: PDFium for PDF-related tests, via `core/scripts/download-pdfium.sh`
 
@@ -52,7 +52,7 @@ cargo test
 Run the Python compatibility smoke suite:
 
 ```sh
-./run_tests.sh
+./bench-python-luau.sh
 ```
 
 Check committed Bash/Python compatibility baselines:
@@ -77,7 +77,7 @@ cargo test -p cpsl-cli --test sandboxes_rm_integration -- --ignored
 - `runtime/` - Luau runtimes for shell and Python compatibility
 - `manifests/` - example sandbox manifests
 - `docs/` - design notes and implementation references
-- `test/` - Python compatibility scripts used by `./run_tests.sh`
+- `test/` - Python compatibility scripts used by `./bench-python-luau.sh`
 
 ## Module Changes
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cpsl Python transpiler test runner
+# CPSL Python-on-Luau benchmark runner
 # Runs each .py test file via both cpsl --python and python3,
 # compares output, captures per-phase timing, and generates a markdown report.
 
@@ -75,7 +75,7 @@ FAIL=0
 
 # ── Report header ───────────────────────────────────────────────
 cat > "$REPORT" <<'HEADER'
-# Cpsl Python Transpiler — Test Report
+# CPSL Python-on-Luau — Benchmark Report
 
 ## Results
 
@@ -205,7 +205,7 @@ cat >> "$REPORT" <<EOF
 - **Pass:** $PASS
 - **Fail:** $FAIL
 - **Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-- **Cpsl:** \`$("$CPSL" --help 2>&1 | head -1)\`
+- **CPSL:** \`$("$CPSL" --help 2>&1 | head -1)\`
 - **Python:** \`$(python3 --version 2>&1)\`
 - **Platform:** \`$(uname -ms)\`
 
