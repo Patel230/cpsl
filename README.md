@@ -1,10 +1,12 @@
 # CPSL
 
-Manifest-built mini-OS capsules for agents.
+Safe mini-OS "capsules" for agents that can run everywhere: Linux, macOS, Windows, web browsers, iOS, Android...
 
-Package tools, permissions, files, network access, and language adapters into explicit sandbox images. The same runtime contract can live in a CLI, server, app host, browser, or mobile shell.
+Package tools, files, and permissions. Build. Run.
 
-CPSL is an early open-source runtime for building small sandbox images an agent can actually live inside. A capsule bundles a Luau VM, selected Rust modules, files, mounts, HTTP policy, and optional shell/Python shims behind one TOML manifest.
+Agents can communicate with CPSL using Bash, Python, or Lua/Luau, and so can you.
+
+CPSL is an early open-source runtime for building small sandbox images an agent can actually live inside. A capsule is described by a TOML manifest and runs inside a Luau VM with selected Rust capabilities exposed to it.
 
 The workflow is intentionally Docker-shaped:
 
@@ -12,13 +14,11 @@ The workflow is intentionally Docker-shaped:
 cpsl build -> cpsl ls -> cpsl run
 ```
 
-The implementation is not Docker. A CPSL capsule is not OCI, not a Linux filesystem, and not kernel isolation. It is a compact Luau-backed runtime image with only the modules and host access you asked for.
-
-CPSL started on May 4, 2026. The CLI, manifest format, module API, prebuilt capsule story, and registry shape are all still open. Patches welcome.
+CPSL is not Docker. It is not a Linux distribution, not a container image, and not CPython. It is Unix-like enough for agents, with explicit modules, files, mounts, and network rules.
 
 ## Quick Start
 
-Requires Rust and Cargo for now:
+Requires Rust and Cargo for now. Installers are coming soon.
 
 ```sh
 ./build-cli.sh
@@ -35,37 +35,44 @@ Use `--python` or `--lua` when you want those modes:
 
 Python mode is intentionally not CPython. It does not support `pip install`, arbitrary native packages, or the full CPython standard library. It is a lightweight compatibility layer for practical scripts.
 
-## Build, List, Run
+## Describe, Build, Run
 
-A capsule starts as TOML:
+A capsule starts as TOML. Name your sandbox, pick modules, and pin network domains. Then use the CPSL CLI to build and run. File mounts and allowed domains can be edited while the capsule is running.
+
+Save this as `browser-agent.toml`:
 
 ```toml
 [sandbox]
-name = "json-tool"
+name = "browser-agent"
 
 [modules]
 fs = true
 json = true
+http = true
 
 [python]
-enabled = false
+enabled = true
+
+[http]
+allowed_domains = ["httpbin.org"]
 ```
 
-Build it, list it, and run it:
+Build it:
 
 ```sh
-./cpsl build -t json-tool -f manifests/json-only.toml
+./cpsl build -t browser-agent -f browser-agent.toml
+```
+
+List it:
+
+```sh
 ./cpsl ls
-./cpsl run json-tool --lua -- 'print(json.encode({hello = "world"}))'
 ```
 
-That manifest includes only filesystem and JSON support. Other modules stay out. HTTP, mounts, and Python support are explicit too.
-
-HTTP is policy-gated:
+Run it:
 
 ```sh
-./cpsl build -t web-tool -f manifests/full.toml
-./cpsl run web-tool --allow-domain httpbin.org --lua -- 'local r = http.get("https://httpbin.org/get"); print(r.status)'
+./cpsl run browser-agent --python -- 'print("hello from inside")'
 ```
 
 Included manifests:
@@ -84,15 +91,27 @@ List the built-in modules accepted by manifests:
 
 ## How Does It Work?
 
-CPSL runs code inside [Luau](https://luau.org/), the open-source Lua-derived runtime maintained at [luau-lang/luau](https://github.com/luau-lang/luau).
+CPSL is a Luau VM that exposes Rust crate assemblies.
 
-Luau is the bet: small, fast, embeddable, and designed for [sandboxed VMs](https://luau.org/sandbox/). It is also [battle-tested at Roblox scale](https://luau.org/news/2022-11-04-luau-origins-and-evolution/): Luau powers user-generated content on Roblox, hundreds of thousands of developers write it every month, and Roblox app code written in Luau reaches tens of millions of people daily. CPSL adds its own mount table, module registry, HTTP policy, and host-resource gates around that VM.
+### Luau VM
 
-Shell and Python modes are front doors. CPSL parses those inputs, lowers them into Luau, and runs them in the same sandbox instead of spawning a host shell or CPython.
+[Luau](https://github.com/luau-lang/luau) is a small, fast, embeddable programming language based on Lua with a gradual type system. It was built and open-sourced by [Roblox](https://luau.org/news/2022-11-04-luau-origins-and-evolution/) and is battle-tested by millions of users.
 
-### Python-on-Luau Can Win Sometimes
+Luau is a good fit for CPSL because it is designed for [sandboxed VMs](https://luau.org/sandbox/). CPSL adds its own mount table, module registry, HTTP policy, and host-resource gates around that VM.
 
-`./bench-python-luau.sh` compares CPSL Python mode against `python3`, checks output equality, and reports startup, Python-to-Luau transpilation, Luau execution, and CPython `runpy` script time separately.
+### Composable
+
+File system, networking, JSON, compression, custom modules... If you just need JSON and HTTP with one allowed domain, then stick to the bare minimum.
+
+### Communication
+
+Agents and humans can interact with CPSL using Bash, Python, or Lua/Luau. A Luau runtime runs under the hood; Bash and Python are transpiled.
+
+## Python-on-Luau
+
+Python code can run faster when transpiled into Luau, even including transpilation time.
+
+[`bench-python-luau.sh`](bench-python-luau.sh) compares CPSL Python mode against `python3`, checks output equality, and reports startup, Python-to-Luau transpilation, Luau execution, and CPython `runpy` script time separately.
 
 On one local Darwin arm64 run with Python 3.9.6 on May 6, 2026:
 
@@ -101,7 +120,7 @@ On one local Darwin arm64 run with Python 3.9.6 on May 6, 2026:
 - Transpilation plus Luau execution was still faster in 9/12 cases.
 - `math_heavy.py` was slower.
 
-The smoke suite is the proof point, not a universal benchmark. Python-on-Luau can be faster for some scripts, which is enough to make the experiment interesting.
+This is not a universal Python benchmark. It is a useful proof point.
 
 ```sh
 ./bench-python-luau.sh
@@ -109,41 +128,27 @@ The smoke suite is the proof point, not a universal benchmark. Python-on-Luau ca
 
 ## What CPSL Is Not
 
-- Not Docker, OCI, or a Linux VM.
-- Not kernel-level isolation.
-- Not full Bash.
-- Not CPython or `pip`.
-- Not a package manager for arbitrary host dependencies.
-- Not stable infrastructure yet.
+### Not Linux
 
-## Early, Hackable, Help Wanted
+It looks and feels like Unix: programs, everything is a file, the FS tree is rooted at `/`, and there is a sh/bash-compatible shell, etc. What's important is that it's Unix-like enough for agents.
 
-CPSL is new; the repository started on May 4, 2026. The useful pieces today are:
+### Not Docker/OCI
 
-- native Rust CLI
-- Luau sandbox runtime
-- manifest-selected built-in modules
-- shell-style, Python-compatible, and Luau entry points
-- browser-hosted WASM demo using the same manifest idea
+No daemon. Not a Linux distribution. Not a container image.
 
-Good places to help:
+### Not CPython
 
-- stabilize the manifest schema and validation
-- improve shell and Python compatibility
-- add and test Rust modules exposed to Luau
-- design external modules, e.g. `my-tool = { source = "github.com/org/cpsl-mod-tool" }`
-- make prebuilt capsules so common builds do not require Rust locally
-- keep the browser demo aligned with the native runtime
-
-Later: a registry for prebuilt capsule images, similar in spirit to container registries but for CPSL capsules.
+Though CPSL can run Python code, it does not carry the actual Python tooling. No `pip install`.
 
 ## Build From Source
+
+Installers are coming soon.
 
 ```sh
 git clone https://github.com/fundamental-research-labs/cpsl
 cd cpsl
 ./build-cli.sh
-./cpsl --help
+./cpsl -i
 ```
 
 For direct Cargo builds:
@@ -152,6 +157,12 @@ For direct Cargo builds:
 cargo build --release -p cpsl-cli
 cargo build -p cpsl-cli --no-default-features --features mod-json,mod-fs
 ```
+
+## Early and Hackable
+
+CPSL was open-sourced on May 4, 2026. It's already used in production in some [Fundamental Research Labs](https://fundamentalresearchlabs.com) products. It's an extremely powerful piece of tech, but it is not yet perfectly modular; not all build targets are clearly exposed, etc.
+
+It's the right time to join as a contributor and help us design the perfect isolated, versatile operating system for AI agents.
 
 ## Repository Layout
 
