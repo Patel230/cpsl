@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cpsl Python transpiler test runner
+# CPSL Python-on-Luau benchmark runner
 # Runs each .py test file via both cpsl --python and python3,
 # compares output, captures per-phase timing, and generates a markdown report.
 
@@ -49,10 +49,10 @@ ns_to_ms() {
 
 # ── Warmup (prime macOS dyld/filesystem cache) ─────────────────
 echo "Measuring baselines..."
-"$CPSL" -- 'print("ok")' >/dev/null 2>&1
+"$CPSL" --python -- 'pass' >/dev/null 2>&1
 python3 -c "pass" 2>/dev/null
 
-t0=$(now_ns); "$CPSL" -- 'print("ok")' >/dev/null 2>&1; t1=$(now_ns)
+t0=$(now_ns); "$CPSL" --python -- 'pass' >/dev/null 2>&1; t1=$(now_ns)
 CPSL_STARTUP_NS=$((t1 - t0))
 echo "  cpsl startup: $(ns_to_ms $CPSL_STARTUP_NS)ms"
 
@@ -75,7 +75,7 @@ FAIL=0
 
 # ── Report header ───────────────────────────────────────────────
 cat > "$REPORT" <<'HEADER'
-# Cpsl Python Transpiler — Test Report
+# CPSL Python-on-Luau — Benchmark Report
 
 ## Results
 
@@ -205,7 +205,7 @@ cat >> "$REPORT" <<EOF
 - **Pass:** $PASS
 - **Fail:** $FAIL
 - **Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-- **Cpsl:** \`$("$CPSL" --help 2>&1 | head -1)\`
+- **CPSL:** \`$("$CPSL" --help 2>&1 | head -1)\`
 - **Python:** \`$(python3 --version 2>&1)\`
 - **Platform:** \`$(uname -ms)\`
 
@@ -217,7 +217,7 @@ cat >> "$REPORT" <<EOF
 | **Transpile** | Python source → Luau source (Rust, single-pass) |
 | **Luau exec** | Luau VM execution of transpiled code |
 | **Py startup** | Python interpreter startup (wall time minus internal exec; baseline via \`python3 -c "pass"\`: $(ns_to_ms $PY_STARTUP_NS)ms) |
-| **Py exec** | Pure script execution (measured from inside Python via \`time.perf_counter_ns()\`) |
+| **Py exec** | CPython \`runpy\` script time, measured from inside Python via \`time.perf_counter_ns()\` |
 
 ### Skipped tests
 $(for s in $SKIP_TESTS; do echo "- \`$s\` — requires volume mounts or tests error handling"; done)

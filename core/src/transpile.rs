@@ -561,7 +561,8 @@ impl<'a> Transpiler<'a> {
                     .get(var_name)
                     .map(|s| s.as_str())
                     .unwrap_or(var_name);
-                if is_passthrough_module(module_name) || self.import_aliases.contains_key(var_name)
+                if (is_passthrough_module(module_name) && !self.scopes.is_declared(var_name))
+                    || self.import_aliases.contains_key(var_name)
                 {
                     if has_kwargs {
                         let kwargs_table = self.build_kwargs_only_table(&node.keywords);
@@ -583,7 +584,8 @@ impl<'a> Transpiler<'a> {
                         .get(var_name)
                         .map(|s| s.as_str())
                         .unwrap_or(var_name);
-                    if is_passthrough_module(module_name)
+                    if (is_passthrough_module(module_name)
+                        && !self.scopes.is_declared(var_name))
                         || self.import_aliases.contains_key(var_name)
                     {
                         if has_kwargs {

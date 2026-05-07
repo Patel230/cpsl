@@ -1,7 +1,7 @@
 const MODE_LABELS = new Map([
   [0, "shell"],
   [1, "python"],
-  [2, "luau"],
+  [2, "Lua/Luau"],
 ]);
 
 const PROMPTS = new Map([

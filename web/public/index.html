@@ -1,130 +1,405 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="color-scheme" content="light dark">
-    <meta
-      name="description"
-      content="CPSL is a composable sandbox runtime for agent software with an in-browser WASM demo."
-    >
-    <title>CPSL</title>
-    <link rel="stylesheet" href="./styles.css">
-    <script type="module" src="./main.js"></script>
-  </head>
-  <body>
-    <header class="site-header">
-      <a class="brand" href="#" aria-label="CPSL home">CPSL</a>
-      <nav class="site-nav" aria-label="Primary">
-        <a href="#demo">Demo</a>
-        <a href="#install">Install</a>
-        <a href="https://github.com/fundamental-research-labs/cpsl">GitHub</a>
-        <button class="theme-toggle" type="button" aria-label="Toggle dark mode" aria-pressed="false">
-          <span class="theme-toggle__icon" aria-hidden="true"></span>
-        </button>
-      </nav>
-    </header>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="color-scheme" content="light dark" />
+        <meta
+            name="description"
+            content="CPSL builds mini-OS sandbox capsules for AI agents from TOML manifests: Docker-shaped CLI flow, Luau runtime, Rust modules, and a browser demo."
+        />
+        <meta
+            property="og:title"
+            content="CPSL - mini-OS capsules for AI agents"
+        />
+        <meta
+            property="og:description"
+            content="TOML in, Luau-backed sandbox capsule out. Build it, list it, run it, then try the browser demo."
+        />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary" />
+        <title>CPSL - mini-OS capsules for AI agents</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="./styles.css" />
+        <script type="module" src="./main.js"></script>
+    </head>
+    <body>
+        <header class="site-header">
+            <a class="brand" href="#demo" aria-label="CPSL home">CPSL</a>
+            <nav class="site-nav" aria-label="Primary">
+                <a href="#install">Install</a>
+                <a href="https://github.com/fundamental-research-labs/cpsl"
+                    >GitHub</a
+                >
+                <button
+                    class="theme-toggle"
+                    type="button"
+                    aria-label="Toggle dark mode"
+                    aria-pressed="false"
+                >
+                    <span class="theme-toggle__icon" aria-hidden="true"></span>
+                </button>
+            </nav>
+        </header>
 
-    <main>
-      <section class="hero" aria-labelledby="title">
-        <div class="hero-copy">
-          <p class="eyebrow">Composable sandboxes for agent software</p>
-          <h1 id="title">CPSL</h1>
-          <p class="lede">
-            Package tools, permissions, files, network access, and language adapters into explicit
-            sandbox images. The same runtime contract can live in a CLI, server, app host, or browser.
-          </p>
-          <div class="hero-actions" aria-label="Project links">
-            <a class="button button-primary" href="#install">Install</a>
-          </div>
-        </div>
+        <main>
+            <section class="demo-hero" id="demo" aria-labelledby="title">
+                <div class="demo-copy">
+                    <h1 id="title">CPSL</h1>
+                    <p class="lede lede-small">
+                        Safe mini-OS "capsules" for agents that can run
+                        everywhere: Linux, macOS, Windows, web browsers, iOS,
+                        Android...)
+                    </p>
+                    <p class="lede lede-small">
+                        Package tools, files, and permissions. Build. Run.
+                    </p>
+                    <p class="lede lede-small">
+                        Agents can communicate with CPSL using Bash, Python, or
+                        Lua,<br />and so can you. 👇
+                    </p>
+                </div>
 
-        <section class="terminal-shell" id="demo" aria-labelledby="demo-title">
-          <div class="terminal-toolbar">
-            <h2 id="demo-title">cpsl-web</h2>
-            <div class="mode-tabs" role="tablist" aria-label="CPSL mode">
-              <button type="button" role="tab" aria-selected="true" data-mode="0">Shell</button>
-              <button type="button" role="tab" aria-selected="false" data-mode="1">Python</button>
-              <button type="button" role="tab" aria-selected="false" data-mode="2">Luau</button>
-            </div>
-            <button class="icon-button" type="button" id="clear-terminal" aria-label="Clear console" title="Clear console (Cmd+K)">clear</button>
-            <button class="icon-button icon-only" type="button" id="fullscreen-terminal" aria-label="Expand terminal to full page" aria-pressed="false" title="Full page">
-              <svg class="fullscreen-icon fullscreen-icon--expand" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M8 3H3v5M16 3h5v5M8 21H3v-5M21 16v5h-5"></path>
-              </svg>
-              <svg class="fullscreen-icon fullscreen-icon--collapse" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"></path>
-              </svg>
-            </button>
-          </div>
+                <section class="terminal-shell" aria-labelledby="demo-title">
+                    <div class="terminal-toolbar">
+                        <h2 id="demo-title">cpsl-web capsule</h2>
+                        <div
+                            class="mode-tabs"
+                            role="tablist"
+                            aria-label="CPSL mode"
+                        >
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected="true"
+                                data-mode="0"
+                            >
+                                Shell
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected="false"
+                                data-mode="1"
+                            >
+                                Python
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected="false"
+                                data-mode="2"
+                            >
+                                Lua/Luau
+                            </button>
+                        </div>
+                        <button
+                            class="icon-button"
+                            type="button"
+                            id="clear-terminal"
+                            aria-label="Clear console"
+                            title="Clear console (Cmd+K)"
+                        >
+                            clear
+                        </button>
+                        <button
+                            class="icon-button icon-only"
+                            type="button"
+                            id="fullscreen-terminal"
+                            aria-label="Expand terminal to full page"
+                            aria-pressed="false"
+                            title="Full page"
+                        >
+                            <svg
+                                class="fullscreen-icon fullscreen-icon--expand"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    d="M8 3H3v5M16 3h5v5M8 21H3v-5M21 16v5h-5"
+                                ></path>
+                            </svg>
+                            <svg
+                                class="fullscreen-icon fullscreen-icon--collapse"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"
+                                ></path>
+                            </svg>
+                        </button>
+                    </div>
 
-          <div class="terminal" aria-live="polite" aria-label="Interactive CPSL terminal">
-            <div class="terminal-screen" id="terminal-screen">
-              <div class="terminal-output" id="terminal-output"></div>
-              <form class="terminal-input-row" id="terminal-form" autocomplete="off">
-                <label class="prompt" for="terminal-input" id="terminal-prompt">$</label>
-                <span class="terminal-input-wrap">
-                  <input
-                    id="terminal-input"
-                    name="command"
-                    type="text"
-                    spellcheck="false"
-                    autocapitalize="off"
-                    autocomplete="off"
-                    aria-label="CPSL command"
-                  >
-                  <span class="terminal-placeholder" id="terminal-placeholder" aria-hidden="true"></span>
-                </span>
-              </form>
-            </div>
-          </div>
+                    <div
+                        class="terminal"
+                        aria-live="polite"
+                        aria-label="Interactive CPSL terminal"
+                    >
+                        <div class="terminal-screen" id="terminal-screen">
+                            <div
+                                class="terminal-output"
+                                id="terminal-output"
+                            ></div>
+                            <form
+                                class="terminal-input-row"
+                                id="terminal-form"
+                                autocomplete="off"
+                            >
+                                <label
+                                    class="prompt"
+                                    for="terminal-input"
+                                    id="terminal-prompt"
+                                    >$</label
+                                >
+                                <span class="terminal-input-wrap">
+                                    <input
+                                        id="terminal-input"
+                                        name="command"
+                                        type="text"
+                                        spellcheck="false"
+                                        autocapitalize="off"
+                                        autocomplete="off"
+                                        aria-label="CPSL command"
+                                    />
+                                    <span
+                                        class="terminal-placeholder"
+                                        id="terminal-placeholder"
+                                        aria-hidden="true"
+                                    ></span>
+                                </span>
+                            </form>
+                        </div>
+                    </div>
 
-          <div class="demo-meta" aria-label="Sandbox build details">
-            <span class="capsule-source">
-              Capsule built with
-              <a href="https://github.com/fundamental-research-labs/cpsl/blob/main/web/public/cpsl-web.toml">cpsl-web.toml</a>
-            </span>
-            <span class="allowed-domains">
-              <span class="meta-label">Allowed domains</span>
-              <span id="allowed-domains"><code>httpbin.org</code></span>
-            </span>
-          </div>
-        </section>
-      </section>
+                    <div class="demo-meta" aria-label="Sandbox build details">
+                        <span class="capsule-source">
+                            Built with
+                            <a href="#manifest">cpsl-web.toml</a>
+                        </span>
+                        <span class="allowed-domains">
+                            <span class="meta-label">Allowed domains</span>
+                            <span id="allowed-domains"
+                                ><code>httpbin.org</code></span
+                            >
+                        </span>
+                    </div>
+                </section>
+            </section>
 
-      <section class="details" aria-label="CPSL overview">
-        <article>
-          <h2>Small Capsules</h2>
-          <p>Build only the modules a task needs and leave everything else outside the runtime.</p>
-        </article>
-        <article>
-          <h2>Policy First</h2>
-          <p>Filesystem mounts, HTTP domains, and native capabilities are selected deliberately.</p>
-        </article>
-        <article>
-          <h2>Agent Native</h2>
-          <p>Run Bash-style commands, a Python-compatible subset, or direct Luau in one sandbox.</p>
-        </article>
-      </section>
+            <section
+                class="manifest-section"
+                id="manifest"
+                aria-labelledby="manifest-title"
+            >
+                <div class="manifest-copy">
+                    <div class="section-heading">
+                        <h2 id="manifest-title">Describe, build, run.</h2>
+                        <p>
+                            A capsule starts as TOML. Name your sandbox, pick
+                            modules, and pin network domains. Then use the CPSL
+                            CLI to build and run. File mounts and allowed
+                            domains can be edited while the capsule is running.
+                        </p>
+                    </div>
 
-      <section class="install" id="install" aria-labelledby="install-title">
-        <div>
-          <p class="eyebrow">From source</p>
-          <h2 id="install-title">Install CPSL</h2>
-        </div>
-        <pre><code>git clone https://github.com/fundamental-research-labs/cpsl
+                    <figure
+                        class="manifest-file"
+                        aria-label="cpsl-web.toml manifest example"
+                    >
+                        <figcaption>cpsl-web.toml</figcaption>
+                        <pre class="manifest-example"><code><span class="toml-section">[sandbox]</span>
+<span class="toml-key">name</span> = <span class="toml-string">"browser-agent"</span>
+
+<span class="toml-section">[modules]</span>
+<span class="toml-key">fs</span> = <span class="toml-bool">true</span>
+<span class="toml-key">json</span> = <span class="toml-bool">true</span>
+<span class="toml-key">http</span> = <span class="toml-bool">true</span>
+
+<span class="toml-section">[python]</span>
+<span class="toml-key">enabled</span> = <span class="toml-bool">true</span>
+
+<span class="toml-section">[http]</span>
+<span class="toml-key">allowed_domains</span> = [<span class="toml-string">"httpbin.org"</span>]</code></pre>
+                    </figure>
+                </div>
+
+                <aside class="command-stack" aria-label="CPSL CLI workflow">
+                    <article class="command-card">
+                        <h3>Build</h3>
+                        <pre
+                            class="command-example"
+                        ><code><span class="cmd">$ cpsl build -t browser-agent -f cpsl-web.toml</span>
+<span class="out">built browser-agent</span></code></pre>
+                    </article>
+                    <article class="command-card">
+                        <h3>List</h3>
+                        <pre class="command-example"><code><span class="cmd">$ cpsl ls</span>
+<span class="out">NAME           MODULES         SIZE    BUILT
+browser-agent  fs, http, json  7.4 MB  2026-05-06</span></code></pre>
+                    </article>
+                    <article class="command-card">
+                        <h3>Run</h3>
+                        <pre
+                            class="command-example"
+                        ><code><span class="cmd">$ cpsl run browser-agent --python -- \
+  'print("hello from inside")'</span>
+<span class="out">hello from inside</span></code></pre>
+                    </article>
+                </aside>
+            </section>
+
+            <section class="how-section" id="how" aria-labelledby="how-title">
+                <div class="section-heading">
+                    <h2 id="how-title">How does it work?</h2>
+                    <p>CPSL is a Luau VM that exposes Rust crate assemblies.</p>
+                </div>
+                <div class="info-grid">
+                    <article class="info-card">
+                        <h3>⚙️ Luau VM</h3>
+                        <p>
+                            <a href="https://github.com/luau-lang/luau">Luau</a>
+                            is a small, fast, and embeddable programming
+                            language based on Lua with a gradual type system. It
+                            was built and open-sourced by
+                            <a
+                                href="https://luau.org/news/2022-11-04-luau-origins-and-evolution/"
+                                >Roblox</a
+                            >
+                            and is battle-tested by millions of users.
+                        </p>
+                    </article>
+                    <article class="info-card">
+                        <h3>🧩 Composable</h3>
+                        <p>
+                            File system, networking, JSON, compression, custom
+                            modules...<br />
+                            If you just need JSON and HTTP with one allowed
+                            domain, then stick to the bare minimum.
+                        </p>
+                    </article>
+                    <article class="info-card">
+                        <h3>🎙️ Communication</h3>
+                        <p>
+                            Agents and humans can interact with CPSL using Bash,
+                            Python, or Lua/Luau.<br />A Luau runtime runs under
+                            the hood; Bash and Python are transpiled.
+                        </p>
+                    </article>
+                </div>
+                <aside
+                    class="proof-note"
+                    aria-label="Python on Luau benchmark note"
+                >
+                    <div>
+                        <h3>💡 Python-on-Luau</h3>
+                        <p>
+                            Python code can run faster when transpiled into
+                            Luau, even including transpilation time. 😅<br />See
+                            <a
+                                href="https://github.com/fundamental-research-labs/cpsl/blob/main/bench-python-luau.sh"
+                                class="inline-code"
+                                >bench-python-luau.sh</a
+                            >
+                            in the repo.
+                        </p>
+                    </div>
+                </aside>
+            </section>
+
+            <section class="not-strip" id="not" aria-labelledby="not-title">
+                <div class="section-heading">
+                    <h2 id="not-title">What CPSL is not</h2>
+                </div>
+                <div class="boundary-grid">
+                    <article class="info-card">
+                        <h3>Not Linux</h3>
+                        <p>
+                            It looks and feels like Unix: programs, everything
+                            is a file, the FS tree is rooted at /, and there is
+                            a sh/bash-compatible shell, etc. What's important is
+                            that it's Unix-like enough for agents.
+                        </p>
+                    </article>
+                    <article class="info-card">
+                        <h3>Not Docker/OCI</h3>
+                        <p>
+                            No daemon. Not a Linux distribution. Not a container
+                            image.
+                        </p>
+                    </article>
+                    <article class="info-card">
+                        <h3>Not CPython</h3>
+                        <p>
+                            Though CPSL can run Python code, it does not carry
+                            the actual Python tooling. No
+                            <code>pip install</code>.
+                        </p>
+                    </article>
+                </div>
+            </section>
+
+            <section
+                class="install"
+                id="install"
+                aria-labelledby="install-title"
+            >
+                <div>
+                    <h2 id="install-title">Build from source</h2>
+                    <p>Installers are coming soon.</p>
+                </div>
+                <pre><code>git clone https://github.com/fundamental-research-labs/cpsl
 cd cpsl
 ./build-cli.sh
 ./cpsl -i</code></pre>
-      </section>
-    </main>
+            </section>
 
-    <footer class="site-footer">
-      <span>&copy; <span id="copyright-year"></span> Fundamental Research Labs</span>
-      <span class="footer-links">
-        <span>MIT License</span>
-        <a href="https://github.com/fundamental-research-labs/cpsl">GitHub</a>
-      </span>
-    </footer>
-  </body>
+            <section
+                class="contribute"
+                id="contribute"
+                aria-labelledby="contribute-title"
+            >
+                <div>
+                    <h2 id="contribute-title">
+                        Early and hackable, come contribute!
+                    </h2>
+                </div>
+                <div class="contribute-copy">
+                    <p>
+                        CPSL was open-sourced on May 4, 2026. It's already used
+                        in production in some
+                        <a href="https://fundamentalresearchlabs.com"
+                            >Fundamental Research Labs</a
+                        >
+                        products. It's an extremely powerful piece of tech, but
+                        it is not yet perfectly modular; not all build targets
+                        are clearly exposed, etc. It's the right time to join as
+                        a contributor and help us design the perfect isolated,
+                        versatile operating system for AI agents.
+                    </p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="site-footer">
+            <span class="footer-muted">
+                <span>© 2026</span>
+                <a href="https://fundamentalresearchlabs.com"
+                    >Fundamental Research Labs</a
+                >
+            </span>
+            <span class="footer-links">
+                <span class="footer-muted">MIT</span>
+                <a href="https://github.com/fundamental-research-labs/cpsl"
+                    >GitHub</a
+                >
+                <a href="#demo">Demo</a>
+            </span>
+        </footer>
+    </body>
 </html>
