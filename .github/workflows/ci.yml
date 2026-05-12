@@ -18,6 +18,54 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  rust:
+    name: Rust checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt,clippy
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config xvfb xauth libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rust-checks
+
+      - name: Cache PDFium
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pdfium
+            core/libs/pdfium
+          key: pdfium-${{ runner.os }}-7734
+
+      - name: cargo fmt
+        run: ./ci/fmt.sh
+
+      - name: cargo clippy
+        run: ./ci/clippy.sh
+
+      - name: Install PDFium
+        run: ./core/scripts/download-pdfium.sh
+
+      - name: cargo test
+        run: xvfb-run -a ./ci/test.sh
+
+      - name: Free test build artifacts
+        run: cargo clean
+
+      - name: Compile CLI
+        run: ./ci/build-cli.sh
+
   source-policy:
     name: Source policy
     runs-on: ubuntu-24.04

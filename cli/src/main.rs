@@ -1064,7 +1064,7 @@ fn find_stdlib() -> Vec<(String, String)> {
         dirs
     };
 
-    for dir in search_dirs {
+    if let Some(dir) = search_dirs.into_iter().next() {
         if let Ok(entries) = std::fs::read_dir(&dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -1077,7 +1077,6 @@ fn find_stdlib() -> Vec<(String, String)> {
                 }
             }
         }
-        break; // Use the first stdlib dir found
     }
 
     modules
