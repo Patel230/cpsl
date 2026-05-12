@@ -26,4 +26,3 @@ rustyline = "15"
 dirs = "6"
 toml = "0.8"
 serde = { version = "1", features = ["derive"] }
-atty = "0.2"
