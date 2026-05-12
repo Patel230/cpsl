@@ -12,6 +12,7 @@ RUN apt-get update \
         ca-certificates \
         curl \
         git \
+        libssl-dev \
         libwebkit2gtk-4.1-dev \
         pkg-config \
         zstd \
