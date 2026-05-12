@@ -13,7 +13,10 @@ use aes_gcm::aead::rand_core::RngCore;
 use aes_gcm::aead::{Aead, KeyInit, OsRng};
 use aes_gcm::{Aes256Gcm, Nonce};
 use hmac::Mac;
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{
+    dangerous::insecure_decode, decode, encode, Algorithm, DecodingKey, EncodingKey, Header,
+    Validation,
+};
 use mlua::{Lua, MultiValue, Value};
 use sha2::{Digest as Sha2Digest, Sha256, Sha512};
 use std::collections::HashMap;
@@ -712,18 +715,16 @@ pub fn register_crypto_globals(lua: &Lua) -> Result<(), mlua::Error> {
                 }
             }
 
-            let mut validation = Validation::new(algorithm);
-            if !do_validate {
-                validation.insecure_disable_signature_validation();
-                validation.validate_exp = false;
-                validation.validate_aud = false;
+            let token_data = if do_validate {
+                let validation = Validation::new(algorithm);
+                decode::<HashMap<String, serde_json::Value>>(
+                    &token,
+                    &DecodingKey::from_secret(secret.as_bytes()),
+                    &validation,
+                )
+            } else {
+                insecure_decode::<HashMap<String, serde_json::Value>>(&token)
             }
-
-            let token_data = decode::<HashMap<String, serde_json::Value>>(
-                &token,
-                &DecodingKey::from_secret(secret.as_bytes()),
-                &validation,
-            )
             .map_err(|e| mlua::Error::external(format!("crypto.jwt_decode: {}", e)))?;
 
             // Convert claims to Lua table
