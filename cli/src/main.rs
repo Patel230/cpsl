@@ -9,7 +9,7 @@ use cpsl_core::{MountTable, Sandbox};
 use rustyline::config::Configurer;
 use rustyline::history::DefaultHistory;
 use rustyline::{Cmd, Editor, EventHandler, KeyCode, KeyEvent, Modifiers};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, IsTerminal, Write};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -285,7 +285,7 @@ fn cmd_build(args: BuildArgs) {
         let stderr = child.stderr.take().expect("captured stderr");
         let reader = BufReader::new(stderr);
 
-        let is_tty = atty::is(atty::Stream::Stderr);
+        let is_tty = std::io::stderr().is_terminal();
         let mut compiled_count: usize = 0;
         let mut total_crates: Option<usize> = None;
         let mut error_lines: Vec<String> = Vec::new();
