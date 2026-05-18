@@ -4,11 +4,13 @@ Safe mini-OS "capsules" for agents that can run everywhere: Linux, macOS, Window
 
 Package tools, files, and permissions. Build. Run.
 
-Agents can communicate with CPSL using Bash, Python, or Lua/Luau, and so can you.
+Agents and humans can interact with CPSL using Bash, Python, or Lua/Luau.
 
-CPSL is an early open-source runtime for building small sandbox images an agent can actually live inside. A capsule is described by a TOML manifest and runs inside a Luau VM with selected Rust capabilities exposed to it.
+Try a WASM CPSL capsule in the browser at [cpsl.io](https://cpsl.io/).
 
-The workflow is intentionally Docker-shaped:
+CPSL is an early open-source runtime for building small sandbox capsules an agent can actually live inside. A capsule is described by a TOML manifest and runs inside a Luau VM with selected Rust capabilities exposed to it.
+
+The CLI loop is short:
 
 ```text
 cpsl build -> cpsl ls -> cpsl run
@@ -16,30 +18,58 @@ cpsl build -> cpsl ls -> cpsl run
 
 CPSL is not Docker. It is not a Linux distribution, not a container image, and not CPython. It is Unix-like enough for agents, with explicit modules, files, mounts, and network rules.
 
+## Early and Hackable
+
+CPSL was open-sourced on May 4, 2026. It is already used in some [Fundamental Research Labs](https://fundamentalresearchlabs.com) products, but the public project is still young: install targets, module boundaries, SDK builds, and demos are still being shaped.
+
+This is a good time to contribute to the runtime, CLI, manifests, web demo, SDK targets, and agent workflows.
+
 ## Quick Start
 
 Requires Rust and Cargo for now. Installers are coming soon.
 
 ```sh
+# Download the source tree.
+git clone https://github.com/fundamental-research-labs/cpsl
+
+# Enter the checkout.
+cd cpsl
+
+# Build the repo-local CPSL CLI at ./cpsl.
 ./build-cli.sh
+
+# Run one command through the default Bash-compatible interface.
 ./cpsl -- 'echo hello from CPSL'
+
+# Start an interactive CPSL shell.
 ./cpsl -i
 ```
 
-Use `--python` or `--lua` when you want those modes:
+`./build-cli.sh` builds the CLI, not a capsule. A capsule is built from a TOML manifest:
+
+```sh
+# Build the json-only capsule from an included manifest.
+./cpsl build -f manifests/json-only.toml
+
+# List capsules built on this machine.
+./cpsl ls
+
+# Run Luau code inside the json-only capsule.
+./cpsl run json-only --lua -- 'print(json.encode({hello = "world"}))'
+```
+
+Use `--python` or `--lua` when you want to use those language interfaces:
 
 ```sh
 ./cpsl --python -- 'print("hello from python mode")'
 ./cpsl --lua -- 'print("hello from luau")'
 ```
 
-Python mode is intentionally not CPython. It does not support `pip install`, arbitrary native packages, or the full CPython standard library. It is a lightweight compatibility layer for practical scripts.
+Default mode is Bash-compatible. `--lua` executes Luau directly. `--python` transpiles Python syntax to Luau; it does not invoke CPython and does not require Python to be installed.
 
-## Describe, Build, Run
+### Custom Capsule
 
-A capsule starts as TOML. Name your sandbox, pick modules, and pin network domains. Then use the CPSL CLI to build and run. File mounts and allowed domains can be edited while the capsule is running.
-
-Save this as `browser-agent.toml`:
+A capsule starts as TOML. Name it, pick modules, and pin network domains:
 
 ```toml
 [sandbox]
@@ -50,37 +80,23 @@ fs = true
 json = true
 http = true
 
-[python]
-enabled = true
-
 [http]
 allowed_domains = ["httpbin.org"]
 ```
 
-Build it:
+Save that as `browser-agent.toml`, then build and run it:
 
 ```sh
-./cpsl build -t browser-agent -f browser-agent.toml
+./cpsl build -f browser-agent.toml
+./cpsl run browser-agent --lua -- 'print(json.encode({status = "ready"}))'
 ```
 
-List it:
-
-```sh
-./cpsl ls
-```
-
-Run it:
-
-```sh
-./cpsl run browser-agent --python -- 'print("hello from inside")'
-```
-
-Included manifests:
+Useful included manifests:
 
 - `manifests/json-only.toml` - filesystem and JSON
 - `manifests/minimal.toml` - filesystem, JSON, and CSV
 - `manifests/data-science.toml` - structured data, numerical computing, and plotting
-- `manifests/full.toml` - broad CLI-registered module set with Python enabled
+- `manifests/full.toml` - broad CLI-registered module set
 - `manifests/all.toml` - broad CLI-registered module set
 
 List the built-in modules accepted by manifests:
@@ -99,15 +115,22 @@ CPSL is a Luau VM that exposes Rust crate assemblies.
 
 Luau is a good fit for CPSL because it is designed for [sandboxed VMs](https://luau.org/sandbox/). CPSL adds its own mount table, module registry, HTTP policy, and host-resource gates around that VM.
 
-### Composable
+### Composable Modules
 
-File system, networking, JSON, compression, custom modules... If you just need JSON and HTTP with one allowed domain, then stick to the bare minimum.
+File system, networking, JSON, compression, custom modules... If you just need JSON and HTTP with one allowed domain, stick to the bare minimum.
 
 ### Communication
 
 Agents and humans can interact with CPSL using Bash, Python, or Lua/Luau. A Luau runtime runs under the hood; Bash and Python are transpiled.
 
-## Python-on-Luau
+### Python-on-Luau
+
+Python mode is intentionally not CPython. It does not support `pip install`, arbitrary native packages, or the full CPython standard library. It is a lightweight compatibility layer for practical scripts.
+
+<details>
+<summary>Python-on-Luau benchmark notes</summary>
+
+These local comparison runs use `./bench-python-luau.sh`, which is optional and requires `python3`. Python is not required to build CPSL or run CPSL Python mode.
 
 | Test | CPSL total ms | CPython total ms |
 |------|---------------|------------------|
@@ -128,66 +151,18 @@ Agents and humans can interact with CPSL using Bash, Python, or Lua/Luau. A Luau
 ./bench-python-luau.sh
 ```
 
-## What CPSL Is Not
-
-### Not Linux
-
-It looks and feels like Unix: programs, everything is a file, the FS tree is rooted at `/`, and there is a sh/bash-compatible shell, etc. What's important is that it's Unix-like enough for agents.
-
-### Not Docker/OCI
-
-No daemon. Not a Linux distribution. Not a container image.
-
-### Not CPython
-
-Though CPSL can run Python code, it does not carry the actual Python tooling. No `pip install`.
-
-## Build From Source
-
-Installers are coming soon.
-
-```sh
-git clone https://github.com/fundamental-research-labs/cpsl
-cd cpsl
-./build-cli.sh
-./cpsl -i
-```
-
-For direct Cargo builds:
-
-```sh
-cargo build --release -p cpsl-cli
-cargo build -p cpsl-cli --no-default-features --features mod-json,mod-fs
-```
-
-## Early and Hackable
-
-CPSL was open-sourced on May 4, 2026. It's already used in production in some [Fundamental Research Labs](https://fundamentalresearchlabs.com) products. It's an extremely powerful piece of tech, but it is not yet perfectly modular; not all build targets are clearly exposed, etc.
-
-It's the right time to join as a contributor and help us design the perfect isolated, versatile operating system for AI agents.
+</details>
 
 ## Roadmap
-
-CPSL is early and hackable. The near-term roadmap focuses on making the runtime easier to install, target, reuse, and demonstrate with real agent workflows.
 
 | Area | Next milestone | Tracking |
 |------|----------------|----------|
 | SDK targets | Build manifest-aware SDKs for iOS, macOS, Windows, Android, and Linux, starting with generated C headers. SDK artifacts should be built on demand by `cpsl` from manifest features, not published as version-tag artifacts. | [#9](https://github.com/fundamental-research-labs/cpsl/issues/9) |
-| Detached sessions | Add Docker-shaped `cpsl run -d` and `cpsl --exec` entry points for long-lived CPSL sessions while leaving the implementation architecture open. | [#10](https://github.com/fundamental-research-labs/cpsl/issues/10) |
+| Detached sessions | Add `cpsl run -d` and `cpsl --exec` entry points for long-lived CPSL sessions while leaving the implementation architecture open. | [#10](https://github.com/fundamental-research-labs/cpsl/issues/10) |
 | CLI release artifacts | Publish `cpsl` CLI binaries for macOS, Windows, and Linux when tagging a version. | [#11](https://github.com/fundamental-research-labs/cpsl/issues/11) |
+| Capsule module contracts | Define the external capsule-module contract, including module metadata, source pinning, compatibility checks, and build boundaries so community modules can live in separate repositories. Distinct from CPSL Hub: this is the source/build contract; Hub is artifact distribution and discovery. | [#18](https://github.com/fundamental-research-labs/cpsl/issues/18) |
 | CPSL Hub | Design the push and pull workflow for pre-built capsules, including metadata, compatibility checks, and provenance. | [#12](https://github.com/fundamental-research-labs/cpsl/issues/12) |
 | Agent sandbox demo | Add a reproducible demo of an agent using a CPSL capsule with explicit files, modules, network rules, and output artifacts. | [#13](https://github.com/fundamental-research-labs/cpsl/issues/13) |
-
-## Repository Layout
-
-- `cli/` - command-line entry point
-- `core/` - sandbox runtime and built-in modules
-- `modules/` - native support crates used by CPSL modules
-- `runtime/` - Luau runtimes for Python and shell compatibility
-- `manifests/` - capsule manifests
-- `web/` - browser demo and static site
-- `docs/` - design notes
-- `test/` - Python compatibility smoke tests
 
 ## Contributing
 

@@ -2,13 +2,35 @@
 
 Thanks for working on CPSL. Keep changes focused, update docs when behavior changes, and run the smallest useful test set before opening a PR.
 
+## Source Policy
+
+CPSL accepts human-written and agent-assisted contributions. The rule is provenance, not the tool used: every submitted change must be reviewable, understood by the contributor, and compatible with this repository's license.
+
+These guardrails matter more for agentic contributions because agents can synthesize code from uncertain context or lose attribution. Treat generated code as code you authored: inspect it, understand it, and be able to explain it in review.
+
+Do:
+
+- Write original code or use sources that are clearly licensed for reuse.
+- Attribute third-party code, fixtures, generated assets, and vendored dependencies in the PR.
+- Keep generated files reproducible and document the command or tool that produced them.
+- Prefer linking to external references over pasting substantial source text.
+
+Do not:
+
+- Paste code from private repositories, proprietary products, blogs, Q&A sites, or model output unless the license and attribution are clear and compatible.
+- Add copied files without preserving required license notices.
+- Ask an agent to recreate unavailable source from memory, screenshots, or non-public context.
+- Submit changes you cannot build, test, or explain.
+
+When in doubt, open an issue before the PR.
+
 ## Prerequisites
 
 - Rust and Cargo for local builds
-- `python3` 3.7+ for `./bench-python-luau.sh`
-- Optional: Docker, used by `./bench-python-luau.sh` as a fallback when local benchmark prerequisites are missing
 - Platform native build tools required by Rust crates on your OS
 - Optional: PDFium for PDF-related tests, via `core/scripts/download-pdfium.sh`
+
+Python and Docker are not required for normal CPSL development. They are only used by the optional Python-on-Luau benchmark script.
 
 ## Setup
 
@@ -19,7 +41,7 @@ Build the local CLI and verify it starts:
 ./cpsl --help
 ```
 
-Run a quick smoke command:
+Run quick smoke commands:
 
 ```sh
 ./cpsl -- 'echo hello from CPSL'
@@ -27,13 +49,13 @@ Run a quick smoke command:
 ./cpsl --lua -- 'print("hello from luau")'
 ```
 
-## Running Sandboxes
+## Running Capsules
 
-Build a manifest into a named sandbox:
+Build a manifest into a named capsule and run code inside it:
 
 ```sh
-./cpsl build -t json-tool -f manifests/json-only.toml
-./cpsl run json-tool --lua -- 'print(json.encode({hello = "world"}))'
+./cpsl build -f manifests/json-only.toml
+./cpsl run json-only --lua -- 'print(json.encode({hello = "world"}))'
 ```
 
 Useful flags:
@@ -42,7 +64,7 @@ Useful flags:
 - `--allow-domain example.com` allows HTTP for a domain when the HTTP module is present.
 - `--deny-domain example.com` denies HTTP for a domain.
 
-## Tests
+## Tests and Checks
 
 Run the Rust test suite:
 
@@ -50,10 +72,12 @@ Run the Rust test suite:
 cargo test
 ```
 
-Run the Python compatibility smoke suite:
+Some CLI integration tests are marked ignored because they build or mutate local capsule binaries:
 
 ```sh
-./bench-python-luau.sh
+cargo test -p cpsl-cli --test build_integration -- --ignored
+cargo test -p cpsl-cli --test run_integration -- --ignored
+cargo test -p cpsl-cli --test sandboxes_rm_integration -- --ignored
 ```
 
 Check committed Bash/Python compatibility baselines:
@@ -62,23 +86,35 @@ Check committed Bash/Python compatibility baselines:
 core/tests/compat/generate_baselines.sh --check
 ```
 
-Some CLI integration tests are marked ignored because they build or mutate local sandbox images:
+Run source policy checks:
 
 ```sh
-cargo test -p cpsl-cli --test build_integration -- --ignored
-cargo test -p cpsl-cli --test run_integration -- --ignored
-cargo test -p cpsl-cli --test sandboxes_rm_integration -- --ignored
+./ci/file-length.sh
+./ci/function-length.sh
+./ci/docstring.sh
 ```
 
-## Project Layout
+The source policy job is intentionally strict about file length, function length, and module docstrings. It keeps reviews tractable, makes generated or pasted code easier to spot, and gives agentic contributions a narrow shape to work inside. Expect these checks to become stricter as the public contribution surface grows.
 
-- `cli/` - command-line interface, manifest parsing, sandbox build/run commands
-- `core/` - Luau sandbox runtime, transpilers, module registration, built-in modules
-- `modules/` - native support crates
-- `runtime/` - Luau runtimes for shell and Python compatibility
-- `manifests/` - example sandbox manifests
-- `docs/` - design notes and implementation references
-- `test/` - Python compatibility scripts used by `./bench-python-luau.sh`
+Run the optional Python compatibility benchmark:
+
+```sh
+./bench-python-luau.sh
+```
+
+This benchmark compares CPSL Python mode with local `python3`. It requires Python 3.7+ and can fall back to Docker when local benchmark prerequisites are missing.
+
+## Where Changes Usually Go
+
+- CLI behavior, manifest parsing, and sandbox commands: `cli/`
+- Runtime behavior, transpilers, module registration, and built-in modules: `core/`
+- Native support crates used by modules: `modules/`
+- Shell and Python compatibility runtimes: `runtime/`
+- Example capsule manifests: `manifests/`
+- Design notes and implementation references: `docs/`
+- Browser demo and static site: `web/`
+- CI policy scripts and support tooling: `ci/` and `tools/ci-check/`
+- Python compatibility smoke scripts: `test/`
 
 ## Module Changes
 
