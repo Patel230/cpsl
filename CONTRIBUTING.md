@@ -48,7 +48,7 @@ Build a manifest into a named capsule and run code inside it:
 ```sh
 ./cpsl build -f manifests/json-only.toml
 ./cpsl ls
-./cpsl run json-only --lua -- 'print(json.encode({hello = "world"}))'
+./cpsl run json-only -- 'json decode "{\"hello\":\"world\"}"'
 ```
 
 Useful flags:

@@ -42,8 +42,21 @@ cd cpsl
 # List capsules built on this machine.
 ./cpsl ls
 
-# Run Luau code inside the json-only capsule.
-./cpsl run json-only --lua -- 'print(json.encode({hello = "world"}))'
+# Run a Bash-compatible command inside the json-only capsule.
+./cpsl run json-only -- 'json decode "{\"hello\":\"world\"}"'
+```
+
+For interactive sessions inside the same capsule, choose the language interface you want:
+
+```sh
+# Bash-compatible shell.
+./cpsl run json-only -i
+
+# Python-style shell.
+./cpsl run json-only --python -i
+
+# Lua/Luau shell.
+./cpsl run json-only --lua -i
 ```
 
 `./build-cli.sh` builds the CLI. `./cpsl build` builds a named capsule from a TOML manifest. `./cpsl run NAME` runs code inside that built capsule. No capsule is built by default.
@@ -59,7 +72,7 @@ For quick experiments, the repo-local CLI can also run an ephemeral scratch sand
 ./cpsl --lua -- 'print("hello from luau")'
 ```
 
-The default mode is Bash-compatible. `--lua` executes Luau directly. `--python` transpiles Python syntax to Luau; it does not invoke CPython or require Python to be installed.
+The default mode is Bash-compatible, including for `./cpsl run NAME`. `--lua` executes Luau directly. `--python` transpiles Python syntax to Luau; it does not invoke CPython or require Python to be installed.
 
 ### Custom Capsule
 
