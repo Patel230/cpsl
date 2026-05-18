@@ -192,7 +192,7 @@ The minimal toolchain can be stripped to essentials: `rustc`, `cargo`, target li
 
 **Long term: Neither.**
 
-Once external modules exist (Phase 10's forward-compatible schema), the module system becomes a registry problem, not a compilation problem. The right long-term answer is likely a build service: `cpsl build` sends the module manifest to a cloud service that compiles and returns the binary. This is how many platforms handle plugin compilation (e.g., Cloudflare Workers). But this is a fundamentally different architecture that depends on having the external module system first.
+Once external modules exist, the module system becomes a source resolution and build contract problem before it becomes a registry problem. The right long-term answer may be a build service: `cpsl build` sends the module manifest to a cloud service that compiles and returns the binary. This is how many platforms handle plugin compilation (e.g., Cloudflare Workers). But this is a fundamentally different architecture that depends on having the external module system first.
 
 ---
 

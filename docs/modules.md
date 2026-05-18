@@ -68,6 +68,8 @@ enum ModuleEntry {
 
 ## Planned: External Module Workflow
 
+Tracked by roadmap issue [#18](https://github.com/fundamental-research-labs/cpsl/issues/18). This work is source-level module authoring and resolution, not CPSL Hub artifact distribution. CPSL Hub may later link to compatible module metadata, but community modules must be able to live in their own repositories without being hosted by Hub.
+
 The eventual workflow for external modules:
 
 1. **Author** creates a crate that exports a `register_*_globals(lua)` function and a `ModuleManifest`
@@ -80,7 +82,7 @@ The eventual workflow for external modules:
 - **Security**: External modules get full access to the Luau VM. Should there be a permission model? Sandboxing within sandboxing?
 - **Version pinning**: `source = "github.com/..."` needs a version/rev specifier. Likely `source = "github.com/foo@v1.2.3"` or a separate `version` field.
 - **Registry**: Should there be a central module registry (like crates.io) or is Git-based resolution sufficient?
-- **Binary distribution**: Can external modules ship pre-compiled `.a` files to avoid requiring a Rust toolchain? This intersects with the distribution research in Phase 11.
+- **Binary distribution**: Can external modules ship pre-compiled `.a` files to avoid requiring a Rust toolchain? This intersects with the self-contained distribution research in `docs/distribution.md` and any future build-service issue.
 
 ## Module Boundaries
 
