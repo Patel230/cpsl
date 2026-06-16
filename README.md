@@ -74,6 +74,12 @@ For quick experiments, the repo-local CLI can also run an ephemeral scratch sand
 
 The default mode is Bash-compatible, including for `./cpsl run NAME`. `--lua` executes Luau directly. `--python` transpiles Python syntax to Luau; it does not invoke CPython or require Python to be installed.
 
+### Herm Local Sandbox Build
+
+Herm owns the end-to-end native local sandbox build flow. From a Herm checkout,
+run `scripts/build-cpsl-image.sh`; it fetches this CPSL repo as a build
+dependency.
+
 ### Custom Capsule 📝
 
 A capsule starts as TOML. Give it a name, enable only the modules it needs, and allow specific network domains:
@@ -101,7 +107,7 @@ Save that as `browser-agent.toml`, then build and run it:
 Included manifest examples:
 
 - `manifests/json-only.toml` - filesystem and JSON
-- `manifests/minimal.toml` - filesystem, JSON, and CSV
+- `manifests/minimal.toml` - filesystem, search, JSON, and CSV
 - `manifests/data-science.toml` - structured data, numerical computing, and plotting
 - `manifests/full.toml` - broad CLI-registered module set
 - `manifests/all.toml` - broad CLI-registered module set
