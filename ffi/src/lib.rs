@@ -8,7 +8,10 @@ use cpsl_core::LocationGateway;
 use cpsl_core::PdfiumEngine;
 #[cfg(feature = "webbrowser")]
 use cpsl_core::WebBrowserGateway;
-use cpsl_core::{FileActivityCallback, HttpGateway, MountPermission, MountTable, Sandbox};
+use cpsl_core::{
+    FileActivityCallback, HttpGateway, MountPermission, MountTable, Sandbox,
+    WEBVIEW_PDF_POLICY_ERROR,
+};
 use serde::Deserialize;
 use serde_json::json;
 use std::ffi::{c_char, c_void, CStr, CString};
@@ -973,6 +976,7 @@ fn create_runtime_sandbox(
     let builder = Sandbox::builder()
         .mounts(mounts)
         .http_gateway(Arc::new(create_http_gateway(config)))
+        .allow_webview_pdf_rendering(webview_pdf_rendering_allowed(config))
         .auto_tmp(false);
     let builder = if let Some(callback) = file_activity_callback {
         builder.file_activity_callback(callback)
@@ -1045,6 +1049,23 @@ fn create_http_gateway(config: &ValidatedSessionConfig) -> HttpGateway {
         builder = builder.deny_domain(domain.clone());
     }
     builder.build()
+}
+
+fn webview_pdf_rendering_allowed(config: &ValidatedSessionConfig) -> bool {
+    let http_unrestricted =
+        network_policy_is_unrestricted(&config.allow_domains, &config.deny_domains);
+    #[cfg(feature = "webbrowser")]
+    let webbrowser_unrestricted = network_policy_is_unrestricted(
+        &config.webbrowser_policy.allow_domains,
+        &config.webbrowser_policy.deny_domains,
+    );
+    #[cfg(not(feature = "webbrowser"))]
+    let webbrowser_unrestricted = true;
+    http_unrestricted && webbrowser_unrestricted
+}
+
+fn network_policy_is_unrestricted(allow_domains: &[String], deny_domains: &[String]) -> bool {
+    deny_domains.is_empty() && allow_domains.iter().any(|domain| domain == "*")
 }
 
 #[cfg(feature = "webbrowser")]
@@ -1214,7 +1235,9 @@ fn eval_luau(session: &Session, request: &EvalRequest) -> serde_json::Value {
 }
 
 fn eval_exec_error_json(message: &str, cwd: &str) -> serde_json::Value {
-    if is_network_policy_denial(message) {
+    if message.contains(WEBVIEW_PDF_POLICY_ERROR) {
+        eval_error_json("sandbox_denied", WEBVIEW_PDF_POLICY_ERROR, cwd)
+    } else if is_network_policy_denial(message) {
         eval_error_json("sandbox_denied", "Network access is denied by policy", cwd)
     } else {
         eval_error_json("runtime_error", message, cwd)
@@ -1550,6 +1573,213 @@ mod tests {
     }
 
     #[test]
+    fn icloud_mounts_are_visible_and_enforce_modes() {
+        let workdir = TempDir::new().unwrap();
+        let project = TempDir::new().unwrap();
+        let draft = TempDir::new().unwrap();
+        fs::write(project.path().join("input.txt"), "icloud input").unwrap();
+        let config = json!({
+            "mounts": [
+                {
+                    "host": workdir.path().canonicalize().unwrap(),
+                    "virtual": WORKDIR,
+                    "mode": "rw"
+                },
+                {
+                    "host": project.path().canonicalize().unwrap(),
+                    "virtual": "/icloud/project",
+                    "mode": "ro"
+                },
+                {
+                    "host": draft.path().canonicalize().unwrap(),
+                    "virtual": "/icloud/draft",
+                    "mode": "rw"
+                }
+            ],
+            "initial_cwd": WORKDIR,
+            "language": LANGUAGE_LUAU,
+            "http": {
+                "mode": "policy",
+                "allow_domains": [],
+                "deny_domains": []
+            }
+        });
+        let config = CString::new(config.to_string()).unwrap();
+        let session = cpsl_session_new(config.as_ptr());
+        assert!(!session.is_null(), "session_new failed: {}", unsafe {
+            borrowed_ffi_string(cpsl_last_error())
+        });
+
+        let response = eval_luau(
+            session,
+            r#"
+                local entries = fs.list("/icloud")
+                table.sort(entries)
+                print(table.concat(entries, ","))
+                print(fs.read("/icloud/project/input.txt"))
+                local write_ok = pcall(function()
+                    fs.write("/icloud/project/input.txt", "changed")
+                end)
+                print("write:" .. tostring(write_ok))
+                local remove_ok = pcall(function()
+                    fs.remove("/icloud/project/input.txt")
+                end)
+                print("remove:" .. tostring(remove_ok))
+                local rename_ok = pcall(function()
+                    fs.rename("/icloud/project/input.txt", "/icloud/project/renamed.txt")
+                end)
+                print("rename:" .. tostring(rename_ok))
+                fs.write("/icloud/draft/out.txt", "draft output")
+                print(fs.read("/icloud/draft/out.txt"))
+            "#,
+        );
+
+        assert_success(&response, 0);
+        let stdout = response["stdout"].as_str().unwrap();
+        assert!(stdout.contains("draft,project"), "{response}");
+        assert!(stdout.contains("icloud input"), "{response}");
+        assert!(stdout.contains("write:false"), "{response}");
+        assert!(stdout.contains("remove:false"), "{response}");
+        assert!(stdout.contains("rename:false"), "{response}");
+        assert!(stdout.contains("draft output"), "{response}");
+        assert_eq!(
+            fs::read_to_string(project.path().join("input.txt")).unwrap(),
+            "icloud input"
+        );
+        assert_eq!(
+            fs::read_to_string(draft.path().join("out.txt")).unwrap(),
+            "draft output"
+        );
+
+        cpsl_session_free(session);
+    }
+
+    #[test]
+    fn readonly_icloud_parent_reserves_the_namespace() {
+        let root = TempDir::new().unwrap();
+        let icloud = TempDir::new().unwrap();
+        let project = TempDir::new().unwrap();
+        fs::create_dir_all(root.path().join("workdir")).unwrap();
+        let config = json!({
+            "mounts": [
+                {
+                    "host": root.path().canonicalize().unwrap(),
+                    "virtual": "/",
+                    "mode": "rw"
+                },
+                {
+                    "host": icloud.path().canonicalize().unwrap(),
+                    "virtual": "/icloud",
+                    "mode": "ro"
+                },
+                {
+                    "host": project.path().canonicalize().unwrap(),
+                    "virtual": "/icloud/project",
+                    "mode": "ro"
+                }
+            ],
+            "initial_cwd": WORKDIR,
+            "language": LANGUAGE_LUAU,
+            "http": {
+                "mode": "policy",
+                "allow_domains": [],
+                "deny_domains": []
+            }
+        });
+        let config = CString::new(config.to_string()).unwrap();
+        let session = cpsl_session_new(config.as_ptr());
+        assert!(!session.is_null(), "session_new failed: {}", unsafe {
+            borrowed_ffi_string(cpsl_last_error())
+        });
+
+        let response = eval_luau(
+            session,
+            r#"
+                local root_write = pcall(function()
+                    fs.write("/workdir/out.txt", "ok")
+                end)
+                local sibling_write = pcall(function()
+                    fs.write("/icloud/other.txt", "blocked")
+                end)
+                local sibling_mkdir = pcall(function()
+                    fs.mkdir("/icloud/other")
+                end)
+                print("root:" .. tostring(root_write))
+                print("sibling-write:" .. tostring(sibling_write))
+                print("sibling-mkdir:" .. tostring(sibling_mkdir))
+            "#,
+        );
+
+        assert_success(&response, 0);
+        let stdout = response["stdout"].as_str().unwrap();
+        assert!(stdout.contains("root:true"), "{response}");
+        assert!(stdout.contains("sibling-write:false"), "{response}");
+        assert!(stdout.contains("sibling-mkdir:false"), "{response}");
+        assert!(!root.path().join("icloud").exists());
+
+        cpsl_session_free(session);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn icloud_mount_symlinks_cannot_escape() {
+        let workdir = TempDir::new().unwrap();
+        let project = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        fs::write(outside.path().join("secret.txt"), "outside secret").unwrap();
+        std::os::unix::fs::symlink(
+            outside.path().join("secret.txt"),
+            project.path().join("link.txt"),
+        )
+        .unwrap();
+        let config = json!({
+            "mounts": [
+                {
+                    "host": workdir.path().canonicalize().unwrap(),
+                    "virtual": WORKDIR,
+                    "mode": "rw"
+                },
+                {
+                    "host": project.path().canonicalize().unwrap(),
+                    "virtual": "/icloud/project",
+                    "mode": "ro"
+                }
+            ],
+            "initial_cwd": WORKDIR,
+            "language": LANGUAGE_LUAU,
+            "http": {
+                "mode": "policy",
+                "allow_domains": [],
+                "deny_domains": []
+            }
+        });
+        let config = CString::new(config.to_string()).unwrap();
+        let session = cpsl_session_new(config.as_ptr());
+        assert!(!session.is_null(), "session_new failed: {}", unsafe {
+            borrowed_ffi_string(cpsl_last_error())
+        });
+
+        let response = eval_luau(
+            session,
+            r#"
+                local ok, err = pcall(function()
+                    return fs.read("/icloud/project/link.txt")
+                end)
+                print(ok)
+                print(tostring(err))
+            "#,
+        );
+
+        assert_success(&response, 0);
+        let stdout = response["stdout"].as_str().unwrap();
+        assert!(!stdout.contains("outside secret"), "{response}");
+        assert!(stdout.contains("false"), "{response}");
+        assert!(stdout.contains("Path traversal denied"), "{response}");
+
+        cpsl_session_free(session);
+    }
+
+    #[test]
     fn metadata_advertises_native_luau_and_bash() {
         let metadata = unsafe { owned_ffi_string(cpsl_backend_metadata_json()) };
         let metadata: serde_json::Value = serde_json::from_str(&metadata).unwrap();
@@ -1665,6 +1895,86 @@ mod tests {
             sandbox.exec("return type(doc.pdfInfo)").unwrap(),
             "function"
         );
+    }
+
+    #[cfg(feature = "pdfium-render")]
+    #[test]
+    fn restricted_network_policy_returns_structured_webview_pdf_denials() {
+        let dir = TempDir::new().unwrap();
+        let markdown = "# Private\n";
+        let existing_output = b"existing output";
+        fs::write(dir.path().join("input.md"), markdown).unwrap();
+        fs::write(dir.path().join("output.pdf"), existing_output).unwrap();
+        let session = new_session_with_language(dir.path(), LANGUAGE_LUAU);
+
+        for source in [
+            r#"return doc.render({text="<h1>Private</h1>", from="html", to="pdf"})"#,
+            r##"return doc.render({text="# Private", from="markdown", to="pdf"})"##,
+        ] {
+            let response = eval_luau(session, source);
+            assert_eval_error(&response, "sandbox_denied");
+            assert_eq!(response["error"]["message"], WEBVIEW_PDF_POLICY_ERROR);
+        }
+
+        let response = eval_luau(
+            session,
+            r#"doc.renderFile({source="/workdir/input.md", target="/workdir/output.pdf"})"#,
+        );
+        assert_eval_error(&response, "sandbox_denied");
+        assert_eq!(response["error"]["message"], WEBVIEW_PDF_POLICY_ERROR);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("input.md")).unwrap(),
+            markdown
+        );
+        assert_eq!(
+            fs::read(dir.path().join("output.pdf")).unwrap(),
+            existing_output
+        );
+
+        let response = eval_luau(
+            session,
+            r##"print(doc.render({text="# Safe", from="markdown", to="html"}))"##,
+        );
+        assert_success(&response, 0);
+        assert!(response["stdout"]
+            .as_str()
+            .unwrap()
+            .contains("<h1>Safe</h1>"));
+
+        cpsl_session_free(session);
+    }
+
+    #[test]
+    fn webview_pdf_rendering_requires_unrestricted_http_policy() {
+        let dir = TempDir::new().unwrap();
+        let mut config = session_config(dir.path().canonicalize().unwrap().to_str().unwrap());
+
+        let restricted = validate_session_config(&config.to_string()).unwrap();
+        assert!(!webview_pdf_rendering_allowed(&restricted));
+
+        config["http"]["allow_domains"] = json!(["*"]);
+        let unrestricted = validate_session_config(&config.to_string()).unwrap();
+        assert!(webview_pdf_rendering_allowed(&unrestricted));
+
+        config["http"]["deny_domains"] = json!(["private.example"]);
+        let partially_restricted = validate_session_config(&config.to_string()).unwrap();
+        assert!(!webview_pdf_rendering_allowed(&partially_restricted));
+    }
+
+    #[cfg(feature = "webbrowser")]
+    #[test]
+    fn webview_pdf_rendering_requires_unrestricted_webbrowser_policy() {
+        let dir = TempDir::new().unwrap();
+        let mut config = session_config(dir.path().canonicalize().unwrap().to_str().unwrap());
+        config["http"]["allow_domains"] = json!(["*"]);
+        config["webbrowser"] = json!({
+            "mode": "policy",
+            "allow_domains": [],
+            "deny_domains": []
+        });
+
+        let restricted = validate_session_config(&config.to_string()).unwrap();
+        assert!(!webview_pdf_rendering_allowed(&restricted));
     }
 
     #[test]
