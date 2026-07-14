@@ -15,90 +15,17 @@ use crate::sandbox::{
     PendingRead, PendingReads, ReturnType, VisionCallback,
 };
 use mlua::{Lua, MultiValue, UserData, UserDataMethods};
-use sha2::{Digest, Sha256};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "pdfium-render")]
 mod pdf_utils;
+mod vision;
 
-/// Maximum number of concurrent vision API calls during readAsync batch resolution.
-/// Prevents overwhelming the LLM API with too many parallel requests.
-const MAX_CONCURRENT_READS: usize = 8;
-
-/// A simple counting semaphore built on std primitives (Mutex + Condvar).
-/// Used to limit concurrent threads without adding external dependencies.
-struct Semaphore {
-    state: Mutex<usize>,
-    condvar: std::sync::Condvar,
-}
-
-impl Semaphore {
-    fn new(permits: usize) -> Self {
-        Self {
-            state: Mutex::new(permits),
-            condvar: std::sync::Condvar::new(),
-        }
-    }
-
-    fn acquire(&self) {
-        let mut count = self.state.lock().unwrap();
-        while *count == 0 {
-            count = self.condvar.wait(count).unwrap();
-        }
-        *count -= 1;
-    }
-
-    fn release(&self) {
-        // Use unwrap_or_else to handle poisoned mutex gracefully —
-        // critical because this runs in SemaphoreGuard::drop during unwinding.
-        let mut count = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        *count += 1;
-        self.condvar.notify_one();
-    }
-
-    /// Acquire a permit and return a guard that releases it on drop.
-    /// Ensures the permit is released even if the holder panics.
-    fn acquire_guard(&self) -> SemaphoreGuard<'_> {
-        self.acquire();
-        SemaphoreGuard(self)
-    }
-}
-
-struct SemaphoreGuard<'a>(&'a Semaphore);
-
-impl Drop for SemaphoreGuard<'_> {
-    fn drop(&mut self) {
-        self.0.release();
-    }
-}
-
-/// Default extraction prompt sent to the vision model when no custom query is provided.
-pub(crate) const DEFAULT_EXTRACTION_QUERY: &str =
-    "Extract all content from this document as markdown. Preserve structure: tables as pipe-delimited, \
-     lists as bullet points, headings with #. For any images, charts, diagrams, or visual elements, \
-     describe them in detail using ![description](image) syntax. Report exactly what you see.";
-
-/// Compute a cache key from file bytes and query string.
-/// Format: `{sha256(file_bytes)}-{sha256(query)}` (hex-encoded).
-pub(crate) fn cache_key(file_bytes: &[u8], query: &str) -> String {
-    let file_hash = hex::encode(Sha256::digest(file_bytes));
-    let query_hash = hex::encode(Sha256::digest(query.as_bytes()));
-    format!("{}-{}", file_hash, query_hash)
-}
-
-/// Read cached text from disk. Returns `Some(text)` if the cache file exists.
-pub(crate) fn cache_read(cache_dir: &Path, key: &str) -> Option<String> {
-    let path = cache_dir.join(format!("{}.txt", key));
-    std::fs::read_to_string(path).ok()
-}
-
-/// Write text to the disk cache. Creates the cache directory on first write.
-pub(crate) fn cache_write(cache_dir: &Path, key: &str, text: &str) {
-    let _ = std::fs::create_dir_all(cache_dir);
-    let path = cache_dir.join(format!("{}.txt", key));
-    let _ = std::fs::write(path, text);
-}
+use vision::{
+    cache_key, cache_read, cache_write, vision_inputs, Semaphore, DEFAULT_EXTRACTION_QUERY,
+    MAX_CONCURRENT_READS,
+};
 
 const DOC_READ_OPTS_FIELDS_BASE: &[FieldDoc] = &[
     FieldDoc { name: "sheet", typ: "number", required: false, description: "Sheet number for spreadsheets (1-indexed)" },
@@ -443,7 +370,8 @@ static DOC_MOD_DOC_VISION: ModuleDoc = ModuleDoc {
                  Supported: xlsx, xls, xlsm, ods, docx, pdf, rtf, pptx, csv, txt, json, md, html, png, jpg, webp, gif.\n    \
                  Two modes: \"structural\" (local parsing) and \"vision\" (AI multimodal analysis).\n    \
                  Defaults: images/PDFs → vision, everything else → structural.\n    \
-                 Override with opts.mode. Use opts.query to customize the vision extraction prompt.",
+                 Override per file with opts.mode=\"structural\" or opts.mode=\"vision\".\n    \
+                 Use opts.query to customize the vision extraction prompt.",
             params: DOC_READ_PARAMS_WITH_MODE,
             returns: ReturnType::String,
             example: Some(r#"local text = doc.read("/attachments/chart.png", {query = "extract all tables"})"#),
@@ -657,7 +585,9 @@ static DOC_MOD_DOC_VISION_PDFIUM: ModuleDoc = ModuleDoc {
                  Supported: xlsx, xls, xlsm, ods, docx, pdf, rtf, pptx, csv, txt, json, md, html, png, jpg, webp, gif.\n    \
                  Two modes: \"structural\" (local parsing) and \"vision\" (AI multimodal analysis).\n    \
                  Defaults: images/PDFs → vision, everything else → structural.\n    \
-                 Override with opts.mode. Use opts.query to customize the vision extraction prompt.",
+                 PDF vision renders every page to an image and sends all pages in one model request.\n    \
+                 Override per file with opts.mode=\"structural\" or opts.mode=\"vision\".\n    \
+                 Use opts.query to customize the vision extraction prompt.",
             params: DOC_READ_PARAMS_WITH_MODE,
             returns: ReturnType::String,
             example: Some(r#"local text = doc.read("/attachments/chart.png", {query = "extract all tables"})"#),
@@ -840,7 +770,7 @@ fn resolve_pending_read(
 
     // Try callback
     if let Some(cb) = callback {
-        match cb(&pr.data, &pr.filename, &pr.query) {
+        match cb(&pr.inputs, &pr.query) {
             Ok(text) => {
                 // Cache the result
                 if let Some(dir) = cache_dir {
@@ -857,9 +787,9 @@ fn resolve_pending_read(
         }
     }
 
-    // Local extraction fallback
-    let result = read_document(&pr.data, pr.format, &pr.read_opts);
-    *pr.result_slot.lock().unwrap() = Some(result);
+    *pr.result_slot.lock().unwrap() = Some(Err(
+        "vision mode requires a vision callback (not available in this environment)".to_string(),
+    ));
 }
 
 /// Parse common arguments for doc.read() and doc.readAsync():
@@ -1047,7 +977,16 @@ fn register_doc_readers(
                         }
                     }
 
-                    match callback(&data, &filename, &query) {
+                    let inputs = vision_inputs(
+                        data,
+                        format,
+                        filename,
+                        #[cfg(feature = "pdfium-render")]
+                        pe.as_ref(),
+                    )
+                    .map_err(mlua::Error::external)?;
+
+                    match callback(&inputs, &query) {
                         Ok(text) => {
                             if let Some(ref dir) = cd {
                                 cache_write(dir, &key, &text);
@@ -1140,17 +1079,27 @@ fn register_doc_readers(
                             }
                         }
 
-                        // Defer to pending queue for parallel resolution
-                        let mut queue = pq.lock().unwrap();
-                        queue.push(PendingRead {
+                        match vision_inputs(
                             data,
-                            filename,
                             format,
-                            query,
-                            read_opts,
-                            cache_key: key,
-                            result_slot: result_slot.clone(),
-                        });
+                            filename,
+                            #[cfg(feature = "pdfium-render")]
+                            pe.as_ref(),
+                        ) {
+                            Ok(inputs) => {
+                                // Defer provider calls to the pending queue for parallel resolution.
+                                let mut queue = pq.lock().unwrap();
+                                queue.push(PendingRead {
+                                    inputs,
+                                    query,
+                                    cache_key: key,
+                                    result_slot: result_slot.clone(),
+                                });
+                            }
+                            Err(error) => {
+                                *result_slot.lock().unwrap() = Some(Err(error));
+                            }
+                        }
                     }
                 }
             }
